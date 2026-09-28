@@ -42,30 +42,48 @@ node1 <code>10.11.2.5</code> (MAC <code>c2:ea:c3:7e:d6:be</code>), node2 <code>1
 </figure>
 
 <p class="q">Q: What does a successful Ping confirm? Does it mean all services on node2 are accessible?</p>
-<p>It confirms that node1 and node2 have IP-layer reachability: packets are routed in both directions, node2 is up, and ICMP Echo is not blocked. It does <strong>not</strong> prove that services are accessible. Ping tests only ICMP; TCP/UDP services may not be running, may listen only on localhost, or may be blocked by a firewall. The reverse is also possible: ICMP can be blocked while services remain reachable.</p>
+<p>It confirms IP-layer reachability: node2 is up, packets are delivered in both directions, and ICMP is not blocked (5/5 replies, 0% loss). It does <strong>not</strong> mean all services are accessible. Ping tests only ICMP; TCP/UDP services may be stopped, bound to localhost, or blocked by a firewall.</p>
 
 <figure>
-  <img src="../screenshots/Task%201%20telnet.png" alt="Telnet session from node1 to node2">
-  <figcaption>Figure 2. Telnet from node1 to node2 (<code>root</code>/<code>toor</code>), logged in to <code>root@node2</code>.</figcaption>
+  <img src="../screenshots/Task%201%20Telnet%20Command.png" alt="Telnet session from node1 to node2 with commands">
+  <figcaption>Figure 2. Telnet from node1 to node2 as <code>root</code>, then <code>mkdir test</code> and <code>ls</code> on node2.</figcaption>
 </figure>
 
 <figure>
-  <img src="../screenshots/Task%201%20SSH.png" alt="SSH session from node1 to node2">
-  <figcaption>Figure 3. SSH from node1 to node2 as <code>kali</code>, logged in to <code>kali@node2</code>.</figcaption>
+  <img src="../screenshots/Task%201%20SSH%20Command.png" alt="SSH session from node1 to node2 with commands">
+  <figcaption>Figure 3. SSH from node1 to node2 as <code>kali</code>, then <code>ls</code>, <code>mkdir test</code>, and <code>ls</code> on node2.</figcaption>
 </figure>
 
 <p class="q">Q: What is the main security weakness of Telnet?</p>
-<p>Telnet sends everything, including the username and password, in plaintext. It provides no encryption, integrity protection, or server authentication, so anyone on the path can capture credentials and commands, alter the session, or impersonate the server. SSH encrypts the session, authenticates the server with host keys, and protects integrity, which is why Telnet is unsuitable for modern remote administration.</p>
+<p>Telnet sends all data, including the username and password, in plaintext. It has no encryption, integrity protection, or server authentication, so anyone who can observe the traffic can steal credentials, read commands, or tamper with or hijack the session. SSH provides all three protections, which makes Telnet unsuitable for modern remote administration.</p>
 
 <h2 class="page-break">2. Packet Sniffing and Traffic Analysis</h2>
 
 <h3>2.1 tcpdump</h3>
-<p>On node2, <code>ip addr</code> shows that <code>eth0</code> (<code>10.11.2.6/24</code>) is the interface on the lab network. <code>lo</code> is loopback, and <code>sink0</code> is a dummy interface used for off-subnet routes.</p>
+<p>On node2, <code>eth0</code> (<code>10.11.2.6/24</code>) is the interface on the lab network. <code>lo</code> is loopback, and <code>sink0</code> is a dummy interface for off-subnet routes. tcpdump was run on <code>eth0</code> with a filter for each protocol while node1 generated the traffic.</p>
 
 <figure>
-  <img src="../screenshots/Task%202%20tcpdump.png" alt="node2 interfaces and tcpdump on eth0">
-  <figcaption>Figure 4. node2 interfaces and <code>tcpdump -i eth0 -nn -v</code> listening on <code>eth0</code>.</figcaption>
+  <img src="../screenshots/Task%202%20tcpdump%20ping.png" alt="tcpdump filtered for ICMP">
+  <figcaption>Figure 4. <code>tcpdump -i eth0 -nn -v icmp</code>: only ICMP echo request/reply pairs between node1 and node2.</figcaption>
 </figure>
+
+<figure>
+  <img src="../screenshots/Task%202%20tcpdump%20telnet.png" alt="tcpdump filtered for Telnet">
+  <figcaption>Figure 5. <code>tcpdump -i eth0 -nn -v -A 'tcp port 23'</code>: only Telnet traffic, with payloads printed as ASCII.</figcaption>
+</figure>
+
+<figure>
+  <img src="../screenshots/Task%202%20tcpdump%20ssh.png" alt="tcpdump filtered for SSH">
+  <figcaption>Figure 6. <code>tcpdump -i eth0 -nn -v 'tcp port 22'</code>: only SSH traffic: handshake, version banner, key exchange, then encrypted data.</figcaption>
+</figure>
+
+<p class="q">How the captured packets differ by protocol:</p>
+<ul>
+  <li><strong>Ping (Figure 4):</strong> ICMP echo request/reply pairs with matching ID and sequence number; no ports. Requests carry DF; replies do not.</li>
+  <li><strong>Telnet (Figure 5):</strong> TCP port 23; after the handshake, 1-byte segments per keystroke, each echoed by the server, with readable payloads.</li>
+  <li><strong>SSH (Figure 6):</strong> TCP port 22; a readable version banner, larger key-exchange packets, then only encrypted payloads.</li>
+</ul>
+<p>The "cksum incorrect" messages are caused by checksum offloading: tcpdump sees outgoing packets before the checksum is filled in. They are not transmission errors.</p>
 
 <p class="q">Q: What information can be identified from tcpdump output?</p>
 <ul>
@@ -76,13 +94,13 @@ node1 <code>10.11.2.5</code> (MAC <code>c2:ea:c3:7e:d6:be</code>), node2 <code>1
   <li>Payload contents with <code>-A</code> (ASCII) or <code>-X</code> (hex and ASCII).</li>
 </ul>
 
-<p class="q">Filter commands:</p>
+<p class="q">Filter commands (Figures 4&ndash;6):</p>
 <pre>tcpdump -i eth0 -nn -v icmp               # Ping only
 tcpdump -i eth0 -nn -v -A 'tcp port 23'   # Telnet only (ASCII payload)
 tcpdump -i eth0 -nn -v 'tcp port 22'      # SSH only</pre>
 
 <p class="q">Q: Can the Telnet and SSH passwords be seen in the traffic?</p>
-<p><strong>Telnet: yes.</strong> Each keystroke is sent in cleartext, typically one character per packet, so <code>-A</code> reveals the password character by character (see Figure 8). <strong>SSH: no.</strong> After the version exchange and Diffie-Hellman key exchange (Figure 7), all traffic, including authentication, is encrypted. Only lengths and timing are visible.</p>
+<p><strong>Telnet: yes.</strong> Each keystroke is sent as a separate cleartext segment, so <code>-A</code> prints the password one character per packet (Figure 5). Figure 10 shows the same credentials recovered in Wireshark. <strong>SSH: no.</strong> After the key exchange (Figures 6 and 9), everything, including the password, is encrypted. Only packet sizes and timing are visible.</p>
 
 <h3>2.2 Wireshark</h3>
 <table>
@@ -94,28 +112,28 @@ tcpdump -i eth0 -nn -v 'tcp port 22'      # SSH only</pre>
 
 <figure>
   <img src="../screenshots/Task%202%20node%202%20packet.png" alt="Wireshark filter ip.src == 10.11.2.6">
-  <figcaption>Figure 5. <code>ip.src == 10.11.2.6</code>: only node2's ICMP replies, TCP ACKs, and Telnet data.</figcaption>
+  <figcaption>Figure 7. <code>ip.src == 10.11.2.6</code>: only node2's ICMP replies, TCP ACKs, and Telnet data.</figcaption>
 </figure>
 
 <figure>
   <img src="../screenshots/Task%202%20telnet.png" alt="Wireshark telnet filter">
-  <figcaption>Figure 6. <code>telnet</code> filter: Telnet data between node1 and node2 on TCP port 23.</figcaption>
+  <figcaption>Figure 8. <code>telnet</code> filter: Telnet data between node1 and node2 on TCP port 23.</figcaption>
 </figure>
 
 <figure>
   <img src="../screenshots/Task%202%20SSH.png" alt="Wireshark ssh filter">
-  <figcaption>Figure 7. <code>ssh</code> filter: protocol banner, key exchange, and encrypted packets (Info shows only "Client:"/"Server:").</figcaption>
+  <figcaption>Figure 9. <code>ssh</code> filter: protocol banner, key exchange, and encrypted packets (Info shows only "Client:"/"Server:").</figcaption>
 </figure>
 
 <figure>
   <img src="../screenshots/Task%202%20telnet%20login.png" alt="Follow TCP stream showing Telnet credentials">
-  <figcaption>Figure 8. Follow TCP Stream of the Telnet session: username <code>root</code> and password <code>toor</code> in plaintext.</figcaption>
+  <figcaption>Figure 10. Follow TCP Stream of the Telnet session: username <code>root</code> and password <code>toor</code> in plaintext.</figcaption>
 </figure>
 
-<p>The username appears as <code>rroooott</code> because node2 echoes each typed character: red is client-to-server and blue is server-to-client. The password <code>toor</code> appears once because the server does not echo it, but the client still sends it unencrypted.</p>
+<p>The username appears as <code>rroooott</code> because the client sends each character and the server echoes it back. The password <code>toor</code> appears once because the server does not echo it, but it is still sent in plaintext.</p>
 
 <p class="q">Q: Why is Telnet a greater risk than SSH?</p>
-<p>A passive sniffer on the same network can recover Telnet credentials and every command and response, as Figure 8 shows, and then reuse the credentials or hijack the session. SSH exposes only an encrypted stream. Its host-key verification also prevents an attacker from silently impersonating the server.</p>
+<p>Any passive sniffer on the path can read Telnet credentials, commands, and output (Figure 10), then reuse the credentials or hijack the session. SSH exposes only encrypted data, and host-key verification detects server impersonation.</p>
 
 <h2 class="page-break">3. Source-IP Spoofing</h2>
 
@@ -129,32 +147,38 @@ send(packet, iface="eth0", verbose=False)</pre>
 
 <figure>
   <img src="../screenshots/Task%203%20IP%20Spoofing.png" alt="Spoofed ICMP packet in Wireshark on node2">
-  <figcaption>Figure 9. Wireshark on node2: Echo Request with source <code>198.51.100.10</code>, ID <code>0x5002</code>, seq 1, "no response found".</figcaption>
+  <figcaption>Figure 11. Wireshark on node2: Echo Request with source <code>198.51.100.10</code>, ID <code>0x5002</code>, seq 1, "no response found".</figcaption>
 </figure>
 
 <p class="q">Q: What source IP does node2 observe? Is it node1's real address?</p>
-<p>node2 sees <code>198.51.100.10</code>, not node1's real address <code>10.11.2.5</code>. The source IP field is chosen by the sender and is not authenticated, so a single packet's source address cannot be trusted as proof of origin.</p>
+<p>node2 sees <code>198.51.100.10</code>, not node1's real address <code>10.11.2.5</code>. The sender sets the source IP field freely and nothing authenticates it, so the source IP of an individual packet is not proof of origin.</p>
 
 <p class="q">Q: Does node1 receive the reply? Where would it be sent?</p>
-<p>No. node2 addresses its Echo Reply to the packet's source, <code>198.51.100.10</code>. That address is outside <code>10.11.2.0/24</code>, so node2 routes the reply through its default route, which in this lab is the <code>sink0</code> dummy interface, and the reply is discarded. No reply appears on <code>eth0</code>. On a real network, the reply would go toward the forged address, not the real sender. Spoofing is therefore blind: the attacker cannot see responses. This is also how reflection attacks direct replies at a victim.</p>
+<p>No. node2 sends the Echo Reply to the packet's source address, <code>198.51.100.10</code>, because that is the only return address it has. That address is outside <code>10.11.2.0/24</code>, so node2 routes the reply via its default route. In this lab, that route is the <code>sink0</code> dummy interface, where the reply is discarded, so no reply appears on <code>eth0</code> (Figure 11). On a real network, the reply would go to whoever owns the forged address, so the spoofer never sees it.</p>
 
 <p class="q">Q: Compare normal and spoofed ICMP packets. What else indicates suspicious traffic?</p>
 <table>
   <tr><th>Field / behaviour</th><th>Normal ping (node1)</th><th>Spoofed packet</th></tr>
   <tr><td>Source IP</td><td><code>10.11.2.5</code> (local subnet)</td><td><code>198.51.100.10</code> (off-subnet)</td></tr>
-  <tr><td>Source MAC</td><td><code>c2:ea:c3:7e:d6:be</code></td><td><code>c2:ea:c3:7e:d6:be</code>, node1's MAC, which reveals the real sender</td></tr>
-  <tr><td>TTL</td><td>64</td><td>64: zero hops, which is impossible for a non-local source</td></tr>
-  <tr><td>Frame / payload</td><td>98 bytes; standard 56-byte ping payload with timestamp</td><td>64 bytes; custom 22-byte ASCII payload</td></tr>
-  <tr><td>ICMP ID / sequence</td><td><code>0x767d</code>, sequence increments 1&ndash;5</td><td>Fixed <code>0x5002</code>, single seq 1</td></tr>
-  <tr><td>IP ID</td><td>Kernel-assigned</td><td><code>1</code> (Scapy default)</td></tr>
-  <tr><td>Reply</td><td>Echo Reply for every request</td><td>None ("no response found")</td></tr>
-  <tr><td>Preceding ARP</td><td>From <code>10.11.2.5</code></td><td>Also from <code>10.11.2.5</code>, not the claimed source</td></tr>
+  <tr><td>Source MAC</td><td><code>c2:ea:c3:7e:d6:be</code> (node1)</td><td><code>c2:ea:c3:7e:d6:be</code>: node1's MAC, which reveals the real sender</td></tr>
+  <tr><td>TTL</td><td>64</td><td>64: no router hops, inconsistent with an off-subnet source</td></tr>
+  <tr><td>Frame / payload</td><td>98 bytes; standard 56-byte ping payload</td><td>64 bytes; custom 22-byte ASCII payload</td></tr>
+  <tr><td>ICMP ID / sequence</td><td>Per-process ID (e.g. <code>0x767d</code>); sequence increases per request</td><td><code>0x5002</code>; single request, seq 1</td></tr>
+  <tr><td>IP ID / flags</td><td>Kernel-assigned (62059, 62264, &hellip;); DF set</td><td><code>1</code> (Scapy default); no DF</td></tr>
+  <tr><td>Reply</td><td>Echo Reply for every request (Figure 4)</td><td>None ("no response found")</td></tr>
 </table>
-<p>The strongest indicators are an IP/MAC mismatch, off-subnet sources arriving directly on the local segment, TTLs that are inconsistent with the claimed origin, unanswered requests, and non-standard payloads or header defaults.</p>
+<p>The ARP request just before the spoofed packet (frame 1 in Figure 11) also came from <code>10.11.2.5</code>, not the claimed source. Useful indicators besides the source IP:</p>
+<ul>
+  <li>An IP-to-MAC mismatch.</li>
+  <li>An off-subnet source arriving directly on the local segment.</li>
+  <li>A TTL that is inconsistent with the claimed origin.</li>
+  <li>Requests with no replies.</li>
+  <li>Non-standard payloads or header defaults.</li>
+</ul>
 
 <h2 class="page-break">4. AI-Based Traffic Analysis</h2>
 
-<p><strong>Conclusion:</strong> An attack occurred. An unknown host, <code>10.0.2.8</code> (MAC <code>08:00:27:25:f3:ec</code>), spoofed the trusted workstation <code>10.0.2.6</code> and injected 800 forged monitoring messages into node2's log service. The forged messages first reported a compromise and then flooded the server with false "all clear" status reports.</p>
+<p><strong>Conclusion:</strong> An attack occurred. An unknown host, <code>10.0.2.8</code> (MAC <code>08:00:27:25:f3:ec</code>), spoofed node1, the trusted workstation <code>10.0.2.6</code> (<code>workstation01</code>). It injected 800 forged messages into node2's (<code>10.0.2.7</code>) monitoring service: first a burst of compromise events, then a flood of false "all clear" reports.</p>
 
 <h3>4.1 Features extracted and why</h3>
 <p><code>analyze_incident.py</code> (Scapy) exports all 4,061 packets to <code>incident_packets.csv</code> with these fields:</p>
@@ -170,12 +194,12 @@ send(packet, iface="eth0", verbose=False)</pre>
 
 <h3>4.2 Use of AI and analysis techniques</h3>
 <ul>
-  <li><strong>LLM-assisted coding:</strong> GitHub Copilot generated the Scapy PCAP-to-CSV extractor and aggregation queries. I verified the output against Wireshark and the raw counts.</li>
+  <li><strong>LLM-assisted coding:</strong> GitHub Copilot generated the Scapy PCAP-to-CSV extractor and aggregation queries. I verified the output against total packet counts and raw payload samples.</li>
   <li><strong>LLM-assisted review:</strong> The LLM read payload samples and summarized event distributions, flagging security-sensitive events that were absent from the baseline.</li>
   <li><strong>Rule-based anomaly detection:</strong> Grouping by (source IP, source MAC) flagged one IP with two MACs. ARP data, sequence-number collisions, IP ID behaviour, and 30-second time bins then characterized the anomaly.</li>
 </ul>
 
-<h3>4.3 Evidence</h3>
+<h3>4.3 How the traffic supports the conclusion</h3>
 <table>
   <tr><th>Observation</th><th>Legitimate sender</th><th>Attacker</th></tr>
   <tr><td>Claimed source IP</td><td><code>10.0.2.6</code></td><td><code>10.0.2.6</code></td></tr>
@@ -189,7 +213,7 @@ send(packet, iface="eth0", verbose=False)</pre>
 
 <p>The same claimed IP, ports, and host name (<code>workstation01</code>) are paired with a MAC that ARP ties to <code>10.0.2.8</code>. Duplicate sequence numbers with conflicting content and a different IP ID pattern confirm a second sender injecting into the stream. Throughout the attack, the real workstation continued sending routine telemetry and reported none of the attacker's events.</p>
 
-<h3>4.4 Reconstruction</h3>
+<h3>4.4 What the attacker did</h3>
 <ol>
   <li><strong>Discovery:</strong> <code>10.0.2.8</code> resolved node2's MAC through ARP.</li>
   <li><strong>Phase 1, about 12:36:00 (&lt;30 s):</strong> Forged ALERT/WARN messages claimed <code>workstation01</code> activity as <code>user=root</code>: <code>SUDO_ROOT SUCCESS</code> (57), <code>FIREWALL_POLICY DISABLED</code> (48), <code>SSH_CONFIG MODIFIED</code> (46), <code>AUTHORIZED_KEY ADDED</code> (40), and <code>AUDIT_CONFIG MODIFIED</code> (31).</li>
@@ -197,7 +221,7 @@ send(packet, iface="eth0", verbose=False)</pre>
 </ol>
 
 <h3>4.5 Likely objective</h3>
-<p>The attacker's goal was to poison the SOC's monitoring record. Phase 1 attributes root access, SSH-key persistence, and disabled firewall and audit controls to the trusted workstation. Phase 2 then buries those alerts under false assurance that health, scans, integrity, and firewall are normal. This produces the "operating normally" picture management wants to see. Combined with overlapping sequence numbers, the result is an inconsistent, untrustworthy log that hides the real state and misattributes activity to <code>workstation01</code>.</p>
+<p>The likely objective was to deceive the SOC by poisoning node2's monitoring data while impersonating a trusted host. Phase 1 records root access, SSH-key persistence, and disabled firewall and audit controls under <code>workstation01</code>'s identity. Phase 2 then floods the server with "all clear" reports. As a result, the latest recorded state shows the system and its security services operating normally, which is exactly the confirmation management wants. The reused sequence numbers leave node2 with contradictory logs, which explains the inconsistency the SOC noticed.</p>
 <p><strong>Limitation:</strong> A network capture proves the messages were forged. It cannot show whether the reported changes actually occurred. <code>workstation01</code>'s <code>authorized_keys</code>, SSH configuration, firewall, and audit settings should be checked directly, and <code>10.0.2.8</code> should be isolated and investigated.</p>
 <p><strong>Mitigation:</strong> Authenticate telemetry (TLS with client certificates or signed messages), alert on IP-to-MAC changes and duplicate sequence numbers, and enable ARP inspection or port security on the network.</p>
 
