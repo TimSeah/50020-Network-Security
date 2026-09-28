@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 1 - Packet Sniffing and Spoofing</title>
+<style>
+  @page { size: A4; margin: 16mm 16mm 18mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #111; }
+  h1 { font-size: 18pt; margin: 0 0 2px; }
+  h2 { font-size: 13.5pt; border-bottom: 1.5px solid #333; padding-bottom: 2px; margin: 22px 0 8px; }
+  h3 { font-size: 11pt; margin: 14px 0 4px; }
+  p { margin: 4px 0 8px; }
+  ul { margin: 4px 0 8px; padding-left: 20px; }
+  li { margin: 2px 0; }
+  code, pre { font-family: Consolas, "Courier New", monospace; font-size: 9pt; }
+  code { background: #f1f1f1; padding: 0 3px; border-radius: 2px; }
+  pre { background: #f5f5f5; border: 1px solid #ddd; padding: 6px 8px; white-space: pre-wrap; margin: 4px 0 10px; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 9.5pt; }
+  th, td { border: 1px solid #bbb; padding: 3px 6px; text-align: left; vertical-align: top; }
+  th { background: #eee; }
+  figure { margin: 8px 0 12px; text-align: center; break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 105mm; border: 1px solid #ccc; }
+  figcaption { font-size: 9pt; color: #444; margin-top: 3px; }
+  .meta { color: #444; margin-bottom: 14px; }
+  .q { font-weight: 600; margin-bottom: 2px; }
+  .page-break { break-before: page; }
+</style>
+</head>
+<body>
+
+<h1>Lab 1: Packet Sniffing and Spoofing</h1>
+<div class="meta">Network Security (50.020) &middot; Name: &lt;Name&gt; &middot; Student ID: &lt;StudentID&gt;</div>
+
+<p><strong>Environment.</strong> One Kali VM running three Docker containers on an isolated network <code>10.11.2.0/24</code>:
+node1 <code>10.11.2.5</code> (MAC <code>c2:ea:c3:7e:d6:be</code>), node2 <code>10.11.2.6</code> (MAC <code>b6:8f:0b:f5:a6:a0</code>), node3 <code>10.11.2.7</code>.</p>
+
+<h2>1. Generate Network Traffic</h2>
+
+<figure>
+  <img src="../screenshots/Task%201%20Ping.png" alt="Ping from node1 to node2">
+  <figcaption>Figure 1. <code>ping -c 5 10.11.2.6</code> from node1: 5 sent, 5 received, 0% loss, average RTT 0.125 ms.</figcaption>
+</figure>
+
+<p class="q">Q: What does a successful Ping confirm? Does it mean all services on node2 are accessible?</p>
+<p>It confirms that node1 and node2 have IP-layer reachability: packets are routed in both directions, node2 is up, and ICMP Echo is not blocked. It does <strong>not</strong> prove that services are accessible. Ping tests only ICMP; TCP/UDP services may not be running, may listen only on localhost, or may be blocked by a firewall. The reverse is also possible: ICMP can be blocked while services remain reachable.</p>
+
+<figure>
+  <img src="../screenshots/Task%201%20telnet.png" alt="Telnet session from node1 to node2">
+  <figcaption>Figure 2. Telnet from node1 to node2 (<code>root</code>/<code>toor</code>), logged in to <code>root@node2</code>.</figcaption>
+</figure>
+
+<figure>
+  <img src="../screenshots/Task%201%20SSH.png" alt="SSH session from node1 to node2">
+  <figcaption>Figure 3. SSH from node1 to node2 as <code>kali</code>, logged in to <code>kali@node2</code>.</figcaption>
+</figure>
+
+<p class="q">Q: What is the main security weakness of Telnet?</p>
+<p>Telnet sends everything, including the username and password, in plaintext. It provides no encryption, integrity protection, or server authentication, so anyone on the path can capture credentials and commands, alter the session, or impersonate the server. SSH encrypts the session, authenticates the server with host keys, and protects integrity, which is why Telnet is unsuitable for modern remote administration.</p>
+
+<h2 class="page-break">2. Packet Sniffing and Traffic Analysis</h2>
+
+<h3>2.1 tcpdump</h3>
+<p>On node2, <code>ip addr</code> shows that <code>eth0</code> (<code>10.11.2.6/24</code>) is the interface on the lab network. <code>lo</code> is loopback, and <code>sink0</code> is a dummy interface used for off-subnet routes.</p>
+
+<figure>
+  <img src="../screenshots/Task%202%20tcpdump.png" alt="node2 interfaces and tcpdump on eth0">
+  <figcaption>Figure 4. node2 interfaces and <code>tcpdump -i eth0 -nn -v</code> listening on <code>eth0</code>.</figcaption>
+</figure>
+
+<p class="q">Q: What information can be identified from tcpdump output?</p>
+<ul>
+  <li>Timestamp, source and destination IP addresses and ports, and protocol.</li>
+  <li>IP header fields (<code>-v</code>): TOS, TTL, IP ID, flags (e.g. DF), protocol, and total length.</li>
+  <li>TCP flags (SYN, ACK, PSH, FIN), sequence and acknowledgement numbers, window, options, and payload length.</li>
+  <li>ICMP type (echo request/reply), identifier, and sequence number.</li>
+  <li>Payload contents with <code>-A</code> (ASCII) or <code>-X</code> (hex and ASCII).</li>
+</ul>
+
+<p class="q">Filter commands:</p>
+<pre>tcpdump -i eth0 -nn -v icmp               # Ping only
+tcpdump -i eth0 -nn -v -A 'tcp port 23'   # Telnet only (ASCII payload)
+tcpdump -i eth0 -nn -v 'tcp port 22'      # SSH only</pre>
+
+<p class="q">Q: Can the Telnet and SSH passwords be seen in the traffic?</p>
+<p><strong>Telnet: yes.</strong> Each keystroke is sent in cleartext, typically one character per packet, so <code>-A</code> reveals the password character by character (see Figure 8). <strong>SSH: no.</strong> After the version exchange and Diffie-Hellman key exchange (Figure 7), all traffic, including authentication, is encrypted. Only lengths and timing are visible.</p>
+
+<h3>2.2 Wireshark</h3>
+<table>
+  <tr><th>Requirement</th><th>Display filter</th><th>Result (of 212 captured packets)</th></tr>
+  <tr><td>Packets sent by node2 only</td><td><code>ip.src == 10.11.2.6</code></td><td>94 displayed</td></tr>
+  <tr><td>Telnet traffic only</td><td><code>telnet</code> (or <code>tcp.port == 23</code>)</td><td>44 displayed</td></tr>
+  <tr><td>SSH traffic only</td><td><code>ssh</code> (or <code>tcp.port == 22</code>)</td><td>91 displayed</td></tr>
+</table>
+
+<figure>
+  <img src="../screenshots/Task%202%20node%202%20packet.png" alt="Wireshark filter ip.src == 10.11.2.6">
+  <figcaption>Figure 5. <code>ip.src == 10.11.2.6</code>: only node2's ICMP replies, TCP ACKs, and Telnet data.</figcaption>
+</figure>
+
+<figure>
+  <img src="../screenshots/Task%202%20telnet.png" alt="Wireshark telnet filter">
+  <figcaption>Figure 6. <code>telnet</code> filter: Telnet data between node1 and node2 on TCP port 23.</figcaption>
+</figure>
+
+<figure>
+  <img src="../screenshots/Task%202%20SSH.png" alt="Wireshark ssh filter">
+  <figcaption>Figure 7. <code>ssh</code> filter: protocol banner, key exchange, and encrypted packets (Info shows only "Client:"/"Server:").</figcaption>
+</figure>
+
+<figure>
+  <img src="../screenshots/Task%202%20telnet%20login.png" alt="Follow TCP stream showing Telnet credentials">
+  <figcaption>Figure 8. Follow TCP Stream of the Telnet session: username <code>root</code> and password <code>toor</code> in plaintext.</figcaption>
+</figure>
+
+<p>The username appears as <code>rroooott</code> because node2 echoes each typed character: red is client-to-server and blue is server-to-client. The password <code>toor</code> appears once because the server does not echo it, but the client still sends it unencrypted.</p>
+
+<p class="q">Q: Why is Telnet a greater risk than SSH?</p>
+<p>A passive sniffer on the same network can recover Telnet credentials and every command and response, as Figure 8 shows, and then reuse the credentials or hijack the session. SSH exposes only an encrypted stream. Its host-key verification also prevents an attacker from silently impersonating the server.</p>
+
+<h2 class="page-break">3. Source-IP Spoofing</h2>
+
+<p><code>spoof_icmp.py</code> (run on node1) builds one ICMP Echo Request with a forged source address from the documentation range <code>198.51.100.0/24</code> (RFC 5737):</p>
+<pre>from scapy.all import ICMP, IP, send
+
+packet = (IP(src="198.51.100.10", dst="10.11.2.6")
+          / ICMP(type="echo-request", id=0x5002, seq=1)
+          / b"Network Security Lab 1")
+send(packet, iface="eth0", verbose=False)</pre>
+
+<figure>
+  <img src="../screenshots/Task%203%20IP%20Spoofing.png" alt="Spoofed ICMP packet in Wireshark on node2">
+  <figcaption>Figure 9. Wireshark on node2: Echo Request with source <code>198.51.100.10</code>, ID <code>0x5002</code>, seq 1, "no response found".</figcaption>
+</figure>
+
+<p class="q">Q: What source IP does node2 observe? Is it node1's real address?</p>
+<p>node2 sees <code>198.51.100.10</code>, not node1's real address <code>10.11.2.5</code>. The source IP field is chosen by the sender and is not authenticated, so a single packet's source address cannot be trusted as proof of origin.</p>
+
+<p class="q">Q: Does node1 receive the reply? Where would it be sent?</p>
+<p>No. node2 addresses its Echo Reply to the packet's source, <code>198.51.100.10</code>. That address is outside <code>10.11.2.0/24</code>, so node2 routes the reply through its default route, which in this lab is the <code>sink0</code> dummy interface, and the reply is discarded. No reply appears on <code>eth0</code>. On a real network, the reply would go toward the forged address, not the real sender. Spoofing is therefore blind: the attacker cannot see responses. This is also how reflection attacks direct replies at a victim.</p>
+
+<p class="q">Q: Compare normal and spoofed ICMP packets. What else indicates suspicious traffic?</p>
+<table>
+  <tr><th>Field / behaviour</th><th>Normal ping (node1)</th><th>Spoofed packet</th></tr>
+  <tr><td>Source IP</td><td><code>10.11.2.5</code> (local subnet)</td><td><code>198.51.100.10</code> (off-subnet)</td></tr>
+  <tr><td>Source MAC</td><td><code>c2:ea:c3:7e:d6:be</code></td><td><code>c2:ea:c3:7e:d6:be</code>, node1's MAC, which reveals the real sender</td></tr>
+  <tr><td>TTL</td><td>64</td><td>64: zero hops, which is impossible for a non-local source</td></tr>
+  <tr><td>Frame / payload</td><td>98 bytes; standard 56-byte ping payload with timestamp</td><td>64 bytes; custom 22-byte ASCII payload</td></tr>
+  <tr><td>ICMP ID / sequence</td><td><code>0x767d</code>, sequence increments 1&ndash;5</td><td>Fixed <code>0x5002</code>, single seq 1</td></tr>
+  <tr><td>IP ID</td><td>Kernel-assigned</td><td><code>1</code> (Scapy default)</td></tr>
+  <tr><td>Reply</td><td>Echo Reply for every request</td><td>None ("no response found")</td></tr>
+  <tr><td>Preceding ARP</td><td>From <code>10.11.2.5</code></td><td>Also from <code>10.11.2.5</code>, not the claimed source</td></tr>
+</table>
+<p>The strongest indicators are an IP/MAC mismatch, off-subnet sources arriving directly on the local segment, TTLs that are inconsistent with the claimed origin, unanswered requests, and non-standard payloads or header defaults.</p>
+
+<h2 class="page-break">4. AI-Based Traffic Analysis</h2>
+
+<p><strong>Conclusion:</strong> An attack occurred. An unknown host, <code>10.0.2.8</code> (MAC <code>08:00:27:25:f3:ec</code>), spoofed the trusted workstation <code>10.0.2.6</code> and injected 800 forged monitoring messages into node2's log service. The forged messages first reported a compromise and then flooded the server with false "all clear" status reports.</p>
+
+<h3>4.1 Features extracted and why</h3>
+<p><code>analyze_incident.py</code> (Scapy) exports all 4,061 packets to <code>incident_packets.csv</code> with these fields:</p>
+<table>
+  <tr><th>Feature</th><th>Relevance</th></tr>
+  <tr><td>Source and destination MAC</td><td>Identifies the device that actually transmitted each frame on the LAN</td></tr>
+  <tr><td>Source and destination IP, UDP ports</td><td>Claimed identity and service (<code>10.0.2.6:40000 &rarr; 10.0.2.7:5514</code>, syslog-style)</td></tr>
+  <tr><td>ARP sender IP/MAC</td><td>Shows which IP each MAC legitimately owns</td></tr>
+  <tr><td>IP TTL and IP ID</td><td>Fingerprints the sending network stack</td></tr>
+  <tr><td>Timestamp</td><td>Timeline reconstruction and burst detection</td></tr>
+  <tr><td>Payload fields: <code>host</code>, <code>seq</code>, <code>severity</code>, <code>event</code>, <code>status</code>, <code>user</code></td><td>What each message claims; sequence numbers should be unique and increasing</td></tr>
+</table>
+
+<h3>4.2 Use of AI and analysis techniques</h3>
+<ul>
+  <li><strong>LLM-assisted coding:</strong> GitHub Copilot generated the Scapy PCAP-to-CSV extractor and aggregation queries. I verified the output against Wireshark and the raw counts.</li>
+  <li><strong>LLM-assisted review:</strong> The LLM read payload samples and summarized event distributions, flagging security-sensitive events that were absent from the baseline.</li>
+  <li><strong>Rule-based anomaly detection:</strong> Grouping by (source IP, source MAC) flagged one IP with two MACs. ARP data, sequence-number collisions, IP ID behaviour, and 30-second time bins then characterized the anomaly.</li>
+</ul>
+
+<h3>4.3 Evidence</h3>
+<table>
+  <tr><th>Observation</th><th>Legitimate sender</th><th>Attacker</th></tr>
+  <tr><td>Claimed source IP</td><td><code>10.0.2.6</code></td><td><code>10.0.2.6</code></td></tr>
+  <tr><td>Source MAC</td><td><code>08:00:27:5a:87:bc</code></td><td><code>08:00:27:25:f3:ec</code></td></tr>
+  <tr><td>ARP identity of MAC</td><td><code>10.0.2.6</code> (17 ARP requests)</td><td><code>10.0.2.8</code> (2 ARP requests for node2)</td></tr>
+  <tr><td>Messages</td><td>3,200 across the entire capture</td><td>800, from 12:35:59 to 12:40:59</td></tr>
+  <tr><td>Sequence numbers</td><td>1&ndash;3200, all unique</td><td>602&ndash;2219, 713 unique; all reuse legitimate numbers, 698 with different content</td></tr>
+  <tr><td>IP ID</td><td>Increasing (43957, 43960, 44015, &hellip;)</td><td>Random (39832, 55505, 8425, &hellip;)</td></tr>
+  <tr><td>Event types</td><td>Heartbeat, CPU/memory, backup, auth, DNS, SSH running</td><td>Root/persistence events, then health and security "all clear"</td></tr>
+</table>
+
+<p>The same claimed IP, ports, and host name (<code>workstation01</code>) are paired with a MAC that ARP ties to <code>10.0.2.8</code>. Duplicate sequence numbers with conflicting content and a different IP ID pattern confirm a second sender injecting into the stream. Throughout the attack, the real workstation continued sending routine telemetry and reported none of the attacker's events.</p>
+
+<h3>4.4 Reconstruction</h3>
+<ol>
+  <li><strong>Discovery:</strong> <code>10.0.2.8</code> resolved node2's MAC through ARP.</li>
+  <li><strong>Phase 1, about 12:36:00 (&lt;30 s):</strong> Forged ALERT/WARN messages claimed <code>workstation01</code> activity as <code>user=root</code>: <code>SUDO_ROOT SUCCESS</code> (57), <code>FIREWALL_POLICY DISABLED</code> (48), <code>SSH_CONFIG MODIFIED</code> (46), <code>AUTHORIZED_KEY ADDED</code> (40), and <code>AUDIT_CONFIG MODIFIED</code> (31).</li>
+  <li><strong>Phase 2, about 12:40:00&ndash;12:41:00:</strong> A flood of reassuring messages: <code>SYSTEM_HEALTH OK</code> (112), <code>SECURITY_SCAN CLEAN</code> (98), <code>FIREWALL_POLICY ENABLED</code> (75), <code>INTEGRITY_CHECK PASS</code> (71), <code>BACKUP COMPLETED</code>, and <code>SSH_SERVICE RUNNING</code>.</li>
+</ol>
+
+<h3>4.5 Likely objective</h3>
+<p>The attacker's goal was to poison the SOC's monitoring record. Phase 1 attributes root access, SSH-key persistence, and disabled firewall and audit controls to the trusted workstation. Phase 2 then buries those alerts under false assurance that health, scans, integrity, and firewall are normal. This produces the "operating normally" picture management wants to see. Combined with overlapping sequence numbers, the result is an inconsistent, untrustworthy log that hides the real state and misattributes activity to <code>workstation01</code>.</p>
+<p><strong>Limitation:</strong> A network capture proves the messages were forged. It cannot show whether the reported changes actually occurred. <code>workstation01</code>'s <code>authorized_keys</code>, SSH configuration, firewall, and audit settings should be checked directly, and <code>10.0.2.8</code> should be isolated and investigated.</p>
+<p><strong>Mitigation:</strong> Authenticate telemetry (TLS with client certificates or signed messages), alert on IP-to-MAC changes and duplicate sequence numbers, and enable ARP inspection or port security on the network.</p>
+
+<h2>5. Submitted Files</h2>
+<ul>
+  <li><code>spoof_icmp.py</code>: Task 3 spoofed ICMP sender.</li>
+  <li><code>analyze_incident.py</code>: Task 4 PCAP feature extractor and anomaly summary.</li>
+  <li><code>incident_packets.csv</code>: extracted packet features from <code>lab1_incident.pcapng</code>.</li>
+</ul>
+<p>Reproduce the Task 4 analysis: <code>python analyze_incident.py lab1_incident.pcapng --output incident_packets.csv</code></p>
+
+</body>
+</html>
