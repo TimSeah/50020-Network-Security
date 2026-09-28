@@ -1,0 +1,55 @@
+x-node-common: &node-common
+  image: three-node-tcp-lab-gedit:local
+  restart: "no"
+  stdin_open: true
+  tty: true
+
+  # This teaching lab intentionally needs interactive sysctl -w access
+  # to namespaced TCP settings under /proc/sys/net. Docker normally mounts
+  # /proc/sys read-only, so privileged mode is used inside this disposable,
+  # isolated VM lab.
+  privileged: true
+
+  volumes:
+    - ./shared:/shared
+    - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+  sysctls:
+    net.ipv4.tcp_syncookies: "0"
+    net.ipv4.tcp_synack_retries: "5"
+    net.ipv4.tcp_max_syn_backlog: "128"
+
+services:
+  node1:
+    <<: *node-common
+    container_name: lab-node1
+    hostname: node1
+    networks:
+      labnet:
+        ipv4_address: 10.11.2.5
+
+  node2:
+    <<: *node-common
+    container_name: lab-node2
+    hostname: node2
+    networks:
+      labnet:
+        ipv4_address: 10.11.2.6
+
+  node3:
+    <<: *node-common
+    container_name: lab-node3
+    hostname: node3
+    networks:
+      labnet:
+        ipv4_address: 10.11.2.7
+
+networks:
+  labnet:
+    name: three-node-tcp-lab-net
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.11.2.0/24
+          gateway: 10.11.2.1

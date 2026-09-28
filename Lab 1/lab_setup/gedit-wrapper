@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -e
+
+# Gedit is a GTK GUI application.  The lab passes DISPLAY/XAUTHORITY into the
+# container through docksh; force X11 and create a lightweight private D-Bus
+# session when the container has no desktop session bus of its own.
+export GDK_BACKEND="${GDK_BACKEND:-x11}"
+
+if [[ -z "${DISPLAY:-}" ]]; then
+    echo "ERROR: DISPLAY is not set. Enter the container with 'docksh node1|node2|node3'." >&2
+    exit 1
+fi
+
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]] && command -v dbus-run-session >/dev/null 2>&1; then
+    exec dbus-run-session -- /usr/bin/gedit "$@"
+fi
+
+exec /usr/bin/gedit "$@"
