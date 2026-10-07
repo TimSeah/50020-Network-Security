@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage:
+  docksh node1
+  docksh node2
+  docksh node3
+
+Aliases:
+  docksh 1
+  docksh 2
+  docksh 3
+EOF
+}
+
+if [[ $# -ne 1 ]]; then
+    usage
+    exit 1
+fi
+
+case "$1" in
+    1|node1|lab-node1) target="lab-node1" ;;
+    2|node2|lab-node2) target="lab-node2" ;;
+    3|node3|lab-node3) target="lab-node3" ;;
+    -h|--help) usage; exit 0 ;;
+    *) target="$1" ;;
+esac
+
+if ! docker inspect "$target" >/dev/null 2>&1; then
+    echo "ERROR: container '$target' does not exist. Run ./start.sh first." >&2
+    exit 1
+fi
+
+if [[ "$(docker inspect -f '{{.State.Running}}' "$target")" != "true" ]]; then
+    echo "ERROR: container '$target' is not running. Run ./start.sh first." >&2
+    exit 1
+fi
+
+display="${DISPLAY:-}"
+xauth_ready=0
+
+if [[ -n "$display" ]] && command -v xauth >/dev/null 2>&1; then
+    cookie_data="$(xauth nlist "$display" 2>/dev/null | sed -e 's/^..../ffff/' || true)"
+
+    if [[ -n "$cookie_data" ]]; then
+        printf '%s\n' "$cookie_data" | docker exec -i --user root "$target" \
+            bash -lc '
+                touch /root/.Xauthority
+                chmod 600 /root/.Xauthority
+                xauth -f /root/.Xauthority nmerge -
+                install -o kali -g kali -m 0600 \
+                    /root/.Xauthority /home/kali/.Xauthority
+            '
+        xauth_ready=1
+    fi
+fi
+
+if [[ -z "$display" ]]; then
+    echo "NOTE: DISPLAY is not set. Wireshark GUI will not open."
+elif [[ "$xauth_ready" -ne 1 ]]; then
+    echo "WARNING: X11 cookie forwarding failed for DISPLAY=$display."
+fi
+
+exec docker exec \
+    --user root \
+    -it \
+    --env DISPLAY="${display:-:0}" \
+    --env XAUTHORITY=/root/.Xauthority \
+    --env QT_X11_NO_MITSHM=1 \
+    "$target" \
+    /bin/bash

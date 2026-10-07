@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REAL_WIRESHARK=/usr/bin/wireshark
+
+if [[ ! -x "$REAL_WIRESHARK" ]]; then
+    echo "ERROR: Wireshark is not installed." >&2
+    exit 1
+fi
+
+if [[ "$(id -u)" -eq 0 ]]; then
+    if [[ -n "${XAUTHORITY:-}" && -r "${XAUTHORITY}" ]]; then
+        install -o kali -g kali -m 0600 \
+            "${XAUTHORITY}" /home/kali/.Xauthority
+    fi
+
+    exec runuser -u kali -- \
+        env \
+        DISPLAY="${DISPLAY:-:0}" \
+        XAUTHORITY=/home/kali/.Xauthority \
+        QT_X11_NO_MITSHM=1 \
+        "$REAL_WIRESHARK" "$@"
+fi
+
+exec "$REAL_WIRESHARK" "$@"

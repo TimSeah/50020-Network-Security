@@ -1,0 +1,6 @@
+# Personal submission files (contain name and student ID)
+Lab1_*_*.html
+Lab1_*_*.pdf
+Lab1_*_*_Code.zip
+!Lab 1/report/Lab1_StudentID_Name.pdf
+./tmp/*

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lab 2 - TCP Attacks and Detection</title>
+<style>
+  @page { size: A4; margin: 15mm 16mm 17mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #17212b; font: 10pt/1.42 "Segoe UI", Arial, sans-serif; }
+  h1 { font-size: 20pt; line-height: 1.15; margin: 0 0 5mm; color: #17324b; }
+  h2 { font-size: 14pt; margin: 7mm 0 2.5mm; padding-bottom: 1.5mm; border-bottom: 1px solid #8fa9ba; color: #17324b; }
+  h3 { font-size: 10.5pt; margin: 4mm 0 1mm; color: #17324b; }
+  p { margin: 0 0 2.6mm; }
+  ul, ol { margin: 1mm 0 3mm; padding-left: 6mm; }
+  li { margin: 0 0 1mm; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; }
+  .meta { color: #4e6577; margin-bottom: 5mm; }
+  .summary { background: #edf4f8; border-left: 3px solid #367a9f; padding: 3mm 4mm; margin: 4mm 0; }
+  .small { font-size: 9pt; color: #425463; }
+  .finding { font-weight: 600; }
+  .newpage { break-before: page; }
+  .keep { break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9pt; }
+  th, td { border: 1px solid #b9c9d3; padding: 1.5mm 2mm; vertical-align: top; text-align: left; }
+  th { background: #eaf1f5; }
+  figure { margin: 3mm 0 5mm; break-inside: avoid; }
+  figure img { width: 100%; height: auto; display: block; border: 1px solid #c4d0d7; }
+  figure.compact img { width: 130mm; max-width: 100%; }
+  figcaption { margin-top: 1mm; font-size: 8.5pt; color: #425463; }
+  a { color: #17678e; text-decoration: none; }
+  .crop { width: 100%; height: 82mm; overflow: hidden; position: relative; border: 1px solid #c4d0d7; }
+  .crop.alert { height: 65mm; }
+  .crop img { position: absolute; width: 200%; max-width: none; height: auto; border: 0; }
+  .crop.tl img { top: 0; left: 0; }
+  .crop.bl img { top: -106mm; left: 0; }
+  .crop.tr img { top: 0; left: -100%; }
+  .caption-source { font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>Lab 2: TCP Attacks &amp; Detection</h1>
+<div class="meta">Network Security (50.020) &nbsp;|&nbsp; Timothy Seah &nbsp;|&nbsp; Student ID 1007654 &nbsp;|&nbsp; 1 October 2026</div>
+<div class="summary"><strong>Scope.</strong> Experiments ran in the isolated three-node Docker network: node1 client <code>10.11.2.5</code>, node2 server <code>10.11.2.6</code>, and node3 attacker <code>10.11.2.7</code>. Wireshark captured node2's <code>eth0</code>. Findings below are limited to the supplied screenshots.</div>
+
+<h2>1. Network and basic operations</h2>
+<p>The node addresses were checked and node2 exchanged ICMP echo replies with node1 and node3. A live Wireshark capture on node2 showed the traffic. This establishes connectivity and packet visibility for the experiments; the supplied screenshots do not include a <code>docker compose ps</code> listing of all three containers.</p>
+<figure>
+  <div class="crop bl"><img src="../screenshots/Task1_02_Ping_Connectivity.png" alt="Ping checks between node2 and the other lab nodes"></div>
+  <figcaption>Figure 1. Node2 pinged both peer addresses successfully. <a href="../screenshots/Task1_02_Ping_Connectivity.png">Open original screenshot</a>.</figcaption>
+</figure>
+
+<h2>2. TCP SYN flooding</h2>
+<h3>Parameters and method</h3>
+<table>
+  <thead><tr><th>Parameter</th><th>Node2 value shown</th><th>Why it matters</th></tr></thead>
+  <tbody>
+    <tr><td><code>tcp_max_syn_backlog</code></td><td>128</td><td>Limits pending connection requests before the handshake completes.</td></tr>
+    <tr><td><code>tcp_syncookies</code></td><td>0 initially</td><td>When enabled, SYN cookies help the server respond under SYN-queue pressure without retaining ordinary pending state for every request.</td></tr>
+    <tr><td><code>tcp_synack_retries</code></td><td>5</td><td>Controls how many SYN-ACK retries are sent while awaiting the final ACK.</td></tr>
+  </tbody>
+</table>
+<p class="small">The Kali host's parameter values are not visible in the supplied screenshots, so a host-versus-container default comparison cannot be verified here.</p>
+<p class="keep">Node3 sent many SYNs to Telnet port 23 with changing source addresses and without completing the handshake. Node2's <code>SYN-RECV</code> monitor showed 97 pending connections in one capture. A legitimate node1 Telnet attempt retransmitted its SYN four times before receiving a SYN-ACK, then completed login. The attack therefore caused a measurable delay in this run, not a sustained outage. The new packet visible from node1 was a retransmitted SYN.</p>
+<figure>
+  <div class="crop tl"><img src="../screenshots/Task2_08_Telnet_SYN_Retransmissions.png" alt="Repeated legitimate Telnet SYN packets before SYN-ACK"></div>
+  <figcaption>Figure 2. Node1's Telnet SYN and retransmissions during the flood. <a href="../screenshots/Task2_08_Telnet_SYN_Retransmissions.png">Open full screenshot</a>.</figcaption>
+</figure>
+
+<h3>Mitigation</h3>
+<p>On node2, <code>net.ipv4.tcp_syncookies</code> was changed from 0 to 1 and read back as 1. During a later flood capture, a new Telnet handshake and login completed, while the half-open count shown was 127. This is consistent with improved availability in the observed run, but the screenshots do not prove SYN cookies were used for a particular handshake or isolate their effect from load variation.</p>
+<figure class="compact">
+  <img src="../screenshots/Task2_09_SYN_Cookies_Enabled.png" alt="TCP SYN cookies enabled on node2">
+  <figcaption>Figure 3. SYN cookies enabled and verified on node2. <a href="../screenshots/Task2_10_Telnet_After_Mitigation.png">See the later Telnet capture</a>.</figcaption>
+</figure>
+
+<h2>3. TCP reset attack</h2>
+<p>Node1 established SSH to node2. Node3 sent a packet claiming to be from <code>10.11.2.5:51458</code> to <code>10.11.2.6:22</code> with the RST flag and a sequence number matching the live connection. Wireshark captured the forged RST; the SSH client then reported <code>Broken pipe</code>. A reset can be accepted when its four-tuple and sequence position are valid for the established TCP session.</p>
+<figure>
+  <div class="crop tl"><img src="../screenshots/Task3_04_RST_And_Disconnect.png" alt="Forged SSH reset packet in Wireshark"></div>
+  <figcaption>Figure 4. Forged RST in the SSH flow. The <a href="../screenshots/Task3_04_RST_And_Disconnect.png">full screenshot</a> also shows the client disconnect.</figcaption>
+</figure>
+<p>An attacker restricted to node3 could still spoof an IP packet, but an off-path attacker may not know the live client port and acceptable sequence number. They would need visibility into the session or another way to infer those values. Simply knowing the two IP addresses is insufficient.</p>
+
+<h2>4. TCP session hijacking</h2>
+<p>With a root Telnet session active between node1 and node2, node3 forged a client-to-server <code>PSH, ACK</code> packet using the observed source port and current raw sequence and acknowledgment numbers. Its 21-byte payload was <code>touch /root/log.txt\r\n</code>. In the capture, node2's acknowledgment advanced from relative 208 to 229; the file then appeared in node2's <code>/root</code> directory. The later retransmissions are consistent with node1 and node2 having different views of the stream after injection.</p>
+<figure class="compact">
+  <img src="../screenshots/Task4_14_Injected_Telnet_Packet.png" alt="Forged Telnet data packet with touch command">
+  <figcaption>Figure 5. Injected 21-byte Telnet packet, including the command in the payload. <a href="../screenshots/Task4_14_Injected_Telnet_Packet.png">Open original screenshot</a>.</figcaption>
+</figure>
+<figure>
+  <div class="crop bl"><img src="../screenshots/Task4_12_File_Created_Node2.png" alt="log.txt file shown on node2"></div>
+  <figcaption>Figure 6. Node2 shows <code>/root/log.txt</code> after the injection. <a href="../screenshots/Task4_12_File_Created_Node2.png">Open full screenshot</a>.</figcaption>
+</figure>
+<p class="small">The assignment also asks for a controlled reverse-shell demonstration. No screenshot of a listener or reverse shell is present in the supplied folder, so that outcome is not claimed here.</p>
+
+<h2>5. AI-assisted real-time attack detection</h2>
+<p><strong>AI use.</strong> The key prompt supplied the Task 5 requirement and asked the AI tool to create a script; a follow-up asked for an end-to-end procedure. The resulting <code>tcp_attack_detector.py</code> was run on node2's <code>eth0</code>. It records packet metadata and alert reasons, not Telnet passwords or full payloads.</p>
+<table>
+  <thead><tr><th>Attack</th><th>Detection approach</th><th>Observed result</th></tr></thead>
+  <tbody>
+    <tr><td>SYN flood</td><td>Count SYNs in a five-second window and track incomplete handshakes.</td><td>Alert at 20 SYNs from 20 source IPs, then 170 SYNs from 170 IPs; the pending count later reached 455.</td></tr>
+    <tr><td>SSH RST</td><td>Flag an inbound SSH RST, comparing its Ethernet source and negotiated TCP timestamp behavior with the legitimate flow.</td><td><code>SUSPICIOUS SSH RST</code> for node1 port 58738. The observed Ethernet source differed from the learned node1 address; the timestamp was absent.</td></tr>
+    <tr><td>Telnet injection</td><td>Check Telnet data packets for identity/timestamp mismatch and the lab's file-creation command marker.</td><td><code>POSSIBLE TELNET INJECTION</code> for port 41914 and a 21-byte payload, with both mismatch reasons and the command marker.</td></tr>
+  </tbody>
+</table>
+<figure>
+  <div class="crop bl alert"><img src="../screenshots/Task5_02_SYN_Flood_Alert.png" alt="SYN flood alert from node2 detector"></div>
+  <figcaption>Figure 7. Detector learns node1's Ethernet address and reports SYN-flood counts. <a href="../screenshots/Task5_02_SYN_Flood_Alert.png">Open full screenshot</a>.</figcaption>
+</figure>
+<figure>
+  <div class="crop bl alert"><img src="../screenshots/Task5_03_SSH_RST_Alert.png" alt="Suspicious SSH RST alert"></div>
+  <figcaption>Figure 8. Detector flags the forged SSH RST using the Ethernet and timestamp mismatches. <a href="../screenshots/Task5_03_SSH_RST_Alert.png">Open full screenshot</a>.</figcaption>
+</figure>
+<figure>
+  <div class="crop bl alert"><img src="../screenshots/Task5_04_Telnet_Injection_Alert.png" alt="Possible Telnet injection alert"></div>
+  <figcaption>Figure 9. Detector flags Telnet command injection with a 21-byte payload. <a href="../screenshots/Task5_04_Telnet_Injection_Alert.png">Open full screenshot</a>.</figcaption>
+</figure>
+<p><strong>Assessment.</strong> The three exercised behaviors generated the intended real-time alerts. They remain heuristics: a legitimate interface change can alter an Ethernet address, a normal reset can occur, and an authorized Telnet user could type the same command. The command marker applies only to visible plaintext. The SYN counter also aggregates ports, so a high pending count can persist briefly after the flood. Alerts should be checked against connection state and packet captures before treating them as proof of an attack.</p>
+<p class="small"><strong>Submitted code:</strong> <code>synflood.py</code>, <code>tcp_RST_SSH.py</code>, <code>tcp_hijacking.py</code>, and <code>tcp_attack_detector.py</code>. All 37 screenshots remain in the <code>screenshots</code> folder with task-specific names.</p>
+
+</body>
+</html>
