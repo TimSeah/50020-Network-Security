@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+iface="${1:-eth0}"
+printf '%-15s %-15s %-15s %-20s %-10s %-8s %s\n' \
+       'source IP' 'destination IP' 'source UDP port' 'destination UDP port' 'DNS TXID' 'type' 'query name'
+
+tshark -l -n -i "$iface" -f 'udp port 53' -Y 'dns' \
+  -T fields -E separator='|' -E occurrence=f \
+  -e ip.src -e ip.dst -e udp.srcport -e udp.dstport \
+  -e dns.id -e dns.flags.response -e dns.qry.name 2>/dev/null |
+while IFS='|' read -r src dst sport dport txid response qname; do
+    [[ -z "${src}${dst}${txid}" ]] && continue
+    if [[ "$response" == "1" || "$response" == "True" || "$response" == "true" ]]; then kind="response"; else kind="query"; fi
+    printf '%-15s %-15s %-15s %-20s %-10s %-8s %s\n' \
+           "$src" "$dst" "$sport" "$dport" "$txid" "$kind" "$qname"
+done

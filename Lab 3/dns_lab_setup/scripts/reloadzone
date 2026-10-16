@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${LAB_ROLE:-}" != "authoritative" ]]; then
+    echo "reloadzone is intended for node4 (attackerns)." >&2
+    exit 1
+fi
+
+zone="${1:-}"
+case "$zone" in
+    example.com)
+        file=/etc/bind/db.example.com
+        ;;
+    attackerpage.com)
+        file=/etc/bind/db.attackerpage.com
+        ;;
+    *)
+        echo "Usage: reloadzone example.com|attackerpage.com" >&2
+        exit 2
+        ;;
+esac
+
+named-checkzone "$zone" "$file" >/dev/null
+rndc reload "$zone" >/dev/null
+printf 'Reloaded %s.\n' "$zone"

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${LAB_ROLE:-}" != "resolver" ]]; then
+    echo "dnssec-on is intended for node2 (localdns)." >&2
+    exit 1
+fi
+printf 'dnssec-validation auto;\n' > /etc/bind/lab-dnssec.conf
+named-checkconf /opt/dns-lab/config/node2/named.conf
+rndc reconfig >/dev/null
+printf 'DNSSEC validation: ON\n'

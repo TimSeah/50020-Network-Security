@@ -1,0 +1,105 @@
+services:
+  node1:
+    image: kali-dns-lab:2026.09-real-example
+    container_name: node1
+    hostname: user
+    environment:
+      LAB_ROLE: client
+      NORMAL_USER: user
+      NORMAL_PASSWORD: user
+      DISPLAY: "${LAB_DISPLAY:-:0}"
+      XAUTHORITY: /tmp/.Xauthority
+      QT_X11_NO_MITSHM: "1"
+      GDK_BACKEND: x11
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    stdin_open: true
+    tty: true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${LAB_XAUTHORITY:-/dev/null}:/tmp/.Xauthority:ro
+    networks:
+      dnsnet:
+        ipv4_address: 10.11.2.5
+
+  node2:
+    image: kali-dns-lab:2026.09-real-example
+    container_name: node2
+    hostname: localdns
+    environment:
+      LAB_ROLE: resolver
+      NORMAL_USER: localdns
+      NORMAL_PASSWORD: localdns
+      DISPLAY: "${LAB_DISPLAY:-:0}"
+      XAUTHORITY: /tmp/.Xauthority
+      QT_X11_NO_MITSHM: "1"
+      GDK_BACKEND: x11
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    stdin_open: true
+    tty: true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${LAB_XAUTHORITY:-/dev/null}:/tmp/.Xauthority:ro
+    networks:
+      dnsnet:
+        ipv4_address: 10.11.2.6
+
+  node3:
+    image: kali-dns-lab:2026.09-real-example
+    container_name: node3
+    hostname: analyst
+    environment:
+      LAB_ROLE: analyst
+      NORMAL_USER: analyst
+      NORMAL_PASSWORD: analyst
+      DISPLAY: "${LAB_DISPLAY:-:0}"
+      XAUTHORITY: /tmp/.Xauthority
+      QT_X11_NO_MITSHM: "1"
+      GDK_BACKEND: x11
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    stdin_open: true
+    tty: true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${LAB_XAUTHORITY:-/dev/null}:/tmp/.Xauthority:ro
+    networks:
+      dnsnet:
+        ipv4_address: 10.11.2.7
+
+  node4:
+    image: kali-dns-lab:2026.09-real-example
+    container_name: node4
+    hostname: attackerns
+    environment:
+      LAB_ROLE: authoritative
+      NORMAL_USER: attackerns
+      NORMAL_PASSWORD: attackerns
+      DISPLAY: "${LAB_DISPLAY:-:0}"
+      XAUTHORITY: /tmp/.Xauthority
+      QT_X11_NO_MITSHM: "1"
+      GDK_BACKEND: x11
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    stdin_open: true
+    tty: true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${LAB_XAUTHORITY:-/dev/null}:/tmp/.Xauthority:ro
+    networks:
+      dnsnet:
+        ipv4_address: 10.11.2.8
+
+networks:
+  dnsnet:
+    name: kali_dns_lab_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.11.2.0/24
+          gateway: 10.11.2.1

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${LAB_ROLE:-}" != "resolver" ]]; then
+    echo "dnssec-status is intended for node2 (localdns)." >&2
+    exit 1
+fi
+if grep -Eq '^dnssec-validation[[:space:]]+(auto|yes);' /etc/bind/lab-dnssec.conf; then
+    echo "DNSSEC validation: ON"
+else
+    echo "DNSSEC validation: OFF"
+fi
