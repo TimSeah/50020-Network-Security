@@ -1,0 +1,123 @@
+{
+  "input": "C:\\Users\\user\\Documents\\GitHub\\50020-Network-Security\\Lab 3\\submission\\Lab3_1007654_Timothy_Seah.docx",
+  "fonts_by_char_count": {},
+  "direct_run_formatting_runs": 52,
+  "direct_paragraph_formatting_paragraphs": 65,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 47,
+      "text": "Node",
+      "style": "Normal"
+    },
+    {
+      "para_index": 48,
+      "text": "Address",
+      "style": "Normal"
+    },
+    {
+      "para_index": 49,
+      "text": "Role",
+      "style": "Normal"
+    },
+    {
+      "para_index": 62,
+      "text": "Command on node1",
+      "style": "Normal"
+    },
+    {
+      "para_index": 63,
+      "text": "Server contacted",
+      "style": "Normal"
+    },
+    {
+      "para_index": 64,
+      "text": "Purpose and observed result",
+      "style": "Normal"
+    },
+    {
+      "para_index": 77,
+      "text": "Replies",
+      "style": "Normal"
+    },
+    {
+      "para_index": 78,
+      "text": "Fresh name",
+      "style": "Normal"
+    },
+    {
+      "para_index": 79,
+      "text": "Upstream destination",
+      "style": "Normal"
+    },
+    {
+      "para_index": 80,
+      "text": "Query to legitimate reply",
+      "style": "Normal"
+    },
+    {
+      "para_index": 81,
+      "text": "Forged replies first",
+      "style": "Normal"
+    }
+  ],
+  "examples": {
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 2,
+        "text": "Network Security (50.020)  |  Timothy Seah  |  Student ID 1007654  |  October 2026",
+        "style": "Normal"
+      },
+      {
+        "para_index": 5,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 7,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 9,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 12,
+        "text": "",
+        "style": "Normal"
+      }
+    ],
+    "direct_run_formatting": [
+      {
+        "para_index": 2,
+        "run_text": "Network Security (50.020)  |  Timothy Seah  |  Student ID 1007654  |  October 20",
+        "style": "Normal"
+      },
+      {
+        "para_index": 47,
+        "run_text": "Node",
+        "style": "Normal"
+      },
+      {
+        "para_index": 48,
+        "run_text": "Address",
+        "style": "Normal"
+      },
+      {
+        "para_index": 49,
+        "run_text": "Role",
+        "style": "Normal"
+      },
+      {
+        "para_index": 50,
+        "run_text": "node1",
+        "style": "Normal"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}
