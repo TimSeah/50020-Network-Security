@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: docksh node1|node2|node3"
+  exit 1
+fi
+
+NODE="$1"
+case "$NODE" in
+  node1|node2|node3) ;;
+  *) echo "Unknown node: $NODE"; exit 1 ;;
+esac
+
+if ! docker inspect "$NODE" >/dev/null 2>&1; then
+  echo "Container $NODE does not exist. Run ./start.sh first."
+  exit 1
+fi
+
+if [[ "$(docker inspect -f '{{.State.Running}}' "$NODE")" != "true" ]]; then
+  echo "Container $NODE is not running."
+  docker logs --tail 60 "$NODE" 2>&1 || true
+  exit 1
+fi
+
+exec docker exec -it -u root -e HOME=/root "$NODE" bash

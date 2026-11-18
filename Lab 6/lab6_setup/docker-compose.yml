@@ -1,0 +1,74 @@
+services:
+  node1:
+    image: ${LAB_IMAGE:-firewall-exam-lab:unconfigured}
+    container_name: node1
+    hostname: node1
+    user: root
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./runtime/node1:/workspace
+      - ./runtime/logs:/logs
+      - ./runtime/shared:/shared
+      - ./firefox:/opt/lab/firefox:ro
+    networks:
+      campus:
+        ipv4_address: 10.11.2.5
+
+  node2:
+    image: ${LAB_IMAGE:-firewall-exam-lab:unconfigured}
+    container_name: node2
+    hostname: node2
+    user: root
+    privileged: true
+    sysctls:
+      - net.ipv4.ip_forward=1
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./runtime/node2:/workspace
+      - ./runtime/logs:/logs
+      - ./runtime/shared:/shared
+    networks:
+      campus:
+        ipv4_address: 10.11.2.6
+      outside:
+        ipv4_address: 10.11.3.6
+
+  node3:
+    image: ${LAB_IMAGE:-firewall-exam-lab:unconfigured}
+    container_name: node3
+    hostname: node3
+    user: root
+    cap_add:
+      - NET_RAW
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./runtime/node3:/workspace
+      - ./runtime/shared:/shared
+    networks:
+      outside:
+        ipv4_address: 10.11.3.7
+
+networks:
+  campus:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.11.2.0/24
+          gateway: 10.11.2.1
+
+  outside:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.11.3.0/24
+          gateway: 10.11.3.1
